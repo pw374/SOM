@@ -52,3 +52,14 @@ let html_of_tl l =
 
 let _ =
   print_string (html_of_tl (read (stream_of_inchannel stdin)))
+
+
+
+let to_html tl =
+  let rec loop (new_def:bool) (type_def:bool) (let_def:bool) (tl:'a list) =
+    let f ?nd:(new_def=new_def) ?td:(type_def=type_def) ?ld:(let_def=let_def) tl =
+      loop new_def type_def let_def tl
+    in
+    match tl with
+    | _ -> ignore(f tl); assert false
+  in loop true false false tl
