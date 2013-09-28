@@ -73,8 +73,16 @@ let new____to_html tl =
         bprintf b "<span class=''>%s</span>" s;
         f ~nd:true tl
       | Keyop(Eq, s) ->
-        bprintf b "<span class=''>%s</span>" s;
-        f ~nd:true tl
+        if not in_par && params then
+          begin
+            bprintf b "<span class=''>%s</span>" s;
+            f ~nd:false ~td:false ~ld:false ~pa:false tl
+          end
+        else
+          begin
+            bprintf b "<span class=''>%s</span>" s;
+            f tl
+          end
       | Keyword(Let, s) ->
         bprintf b "<span class='let'>%s</span>" s;
         f ~nd:true ~td:false ~ld:true tl
