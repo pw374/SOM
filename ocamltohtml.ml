@@ -55,11 +55,68 @@ let _ =
 
 
 
-let to_html tl =
-  let rec loop (new_def:bool) (type_def:bool) (let_def:bool) (tl:'a list) =
-    let f ?nd:(new_def=new_def) ?td:(type_def=type_def) ?ld:(let_def=let_def) tl =
-      loop new_def type_def let_def tl
+let new____to_html tl =
+  let open Buffer in
+  let open Printf in
+  let b = create 42 in
+  let rec loop (new_def:bool) (type_def:bool) (let_def:bool) (in_par:bool)
+      (params:bool) (tl:'a list) =
+    let f ?nd:(new_def=new_def) ?td:(type_def=type_def) ?ld:(let_def=let_def)
+        ?ip:(in_par=in_par) ?pa:(params=params) tl =
+      loop new_def type_def let_def in_par params tl
     in
     match tl with
-    | _ -> ignore(f tl); assert false
+    | [] -> Buffer.contents b
+    | hd::tl ->
+      match hd.kind with
+      | Keyop(SemiColonSemiColon, s) ->
+        bprintf b "<span class=''>%s</span>" s;
+        f ~nd:true tl
+      | Keyop(Eq, s) ->
+        bprintf b "<span class=''>%s</span>" s;
+        f ~nd:true tl
+      | Keyword(Let, s) ->
+        bprintf b "<span class='let'>%s</span>" s;
+        f ~nd:true ~td:false ~ld:true tl
+      | Keyword(And, s) ->
+        bprintf b "<span class='let'>%s</span>" s;
+        f ~nd:true ~td:false ~ld:true tl
+      | Keyword(Type, s) ->
+        bprintf b "<span class='type'>%s</span>" s;
+        f ~nd:true ~td:true ~ld:false tl
+      | String (_, s) ->
+        bprintf b "<span class='string'>%s</span>" (html_escape s);
+        f tl
+      | Char (_, s) ->
+        bprintf b "<span class='string'>%s</span>" (html_escape s);
+        f tl
+      | Keyword (_, s) ->
+        bprintf b "<span class='keyword'>%s</span>" (html_escape s);
+        f tl
+      | Keyop (_, s) ->
+        bprintf b "<span class='keywordsign'>%s</span>" (html_escape s);
+        f tl
+      | Number (_, s) ->
+        bprintf b "<span class='number'>%s</span>" (html_escape s);
+        f tl
+      | Upper s ->
+        bprintf b "<span class='constructor module'>%s</span>" (html_escape s);
+        f tl
+      | Lower s ->
+        bprintf b "<span class='lower'>%s</span>" (html_escape s);
+        f tl
+      | Infix s ->
+        bprintf b "<span class='keywordsign infix'>%s</span>" (html_escape s);
+        f tl
+      | Prefix s ->
+        bprintf b "<span class='keywordsign prefix'>%s</span>" (html_escape s);
+        f tl
+      | Operator s ->
+        bprintf b "<span class='keywordsign operator'>%s</span>" (html_escape s);
+        f tl
+      | Comment s ->
+        bprintf b "<span class='comment'>%s</span>" (html_escape s);
+        f tl
+      | Spaces s -> Buffer.add_string b s;
+        f tl
   in loop true false false tl
