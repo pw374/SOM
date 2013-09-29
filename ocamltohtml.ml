@@ -70,8 +70,16 @@ let new____to_html tl =
     | hd::tl ->
       match hd.kind with
       | Keyop(SemiColonSemiColon, s) ->
-        bprintf b "<span class=''>%s</span>" s;
+        bprintf b "<span class='keyword'>%s</span>" s;
         f ~nd:true tl
+      | Keyop(HyphenGt, s) ->
+        bprintf b "<span class='keyword'>%s</span>" s;
+        if type_def then
+          f tl
+        else if let_def then
+          f ~nd:false ~ip:false ~ld:false tl
+        else
+          f tl
       | Keyop(Eq, s) ->
         if not in_par && params then
           begin
@@ -85,7 +93,10 @@ let new____to_html tl =
           end
       | Keyword(Let, s) ->
         bprintf b "<span class='let'>%s</span>" s;
-        f ~nd:true ~td:false ~ld:true tl
+        f ~nd:true ~td:false ~ld:true ~ip:false tl
+      | Keyword(Fun, s) ->
+        bprintf b "<span class='let'>%s</span>" s;
+        f ~nd:true ~td:false ~ld:true ~ip:true tl
       | Keyword(And, s) ->
         bprintf b "<span class='let'>%s</span>" s;
         f ~nd:true ~td:false ~ld:true tl
