@@ -32,7 +32,7 @@ and kind =
   | Infix    of string
   | Prefix   of string
   | Operator of string
-  | Comment  of string
+  | Comment  of string  (* <- yes, it's considered as a token! *)
   | Spaces   of string
 
 and number = Int of int | Float of float
