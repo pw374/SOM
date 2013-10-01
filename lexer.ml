@@ -8,10 +8,14 @@ type location = {
   ec : int; (* end   column *)
 }
 
-let error loc m =
-  Printf.printf "Characters %d:%d - %d:%d :\nError: %s\n"
-    loc.sl loc.sc loc.el loc.ec m;
-  exit 1
+exception Lexing of string * string
+
+let error loc m s =
+  raise
+    (Lexing
+       (Printf.sprintf "Characters %d:%d - %d:%d :\nError: %s\n"
+          loc.sl loc.sc loc.el loc.ec m,
+        s))
 
 type t = {
     loc  : location;
@@ -189,7 +193,6 @@ let stream_of_string s : stream =
         | l -> buffer <- c::l
   end
 
-exception Lexical_error of location
 
 let read_number (stream:stream) =
   let loc = { sl = stream#line; sc = stream#column;
@@ -208,6 +211,7 @@ let read_number (stream:stream) =
            error
 	     {loc with el = stream#line; ec = stream#column}
 	     "Lexical error: you gave a weird number"
+             (Buffer.contents res ^ "0" ^ String.make 1 c)
          else int := true;
          Buffer.add_char res '0';
          Buffer.add_char res c;
@@ -237,6 +241,7 @@ let read_number (stream:stream) =
 	error
 	  {loc with el = stream#line; ec = stream#column}
 	  "Lexical error: you gave a weird number"
+          (Buffer.contents res ^ ".")
       else
         dot := true;
       Buffer.add_char res c;
@@ -252,7 +257,7 @@ let read_number (stream:stream) =
       Float
         (try float_of_string r
          with _ ->
-           error loc "Lexical error while trying to read a float")
+           error loc "Lexical error while trying to read a float" r)
     else
       Int
         (try int_of_string r
@@ -260,7 +265,7 @@ let read_number (stream:stream) =
            Printf.printf "2(%d:%d) <%s>\n"
              stream#line
              stream#column r;
-           error loc "Lexical error while trying to read an integer")
+           error loc "Lexical error while trying to read an integer" r)
   in
   { kind = Number (n, r); loc = {loc with el = stream#line; ec = stream#column} }
 
@@ -354,23 +359,24 @@ let read_char (stream:stream) =
   let buffer = Buffer.create 10 in
   let rec int i =
     match stream#get_c with
-    | Some c ->
+    | Some c -> Buffer.add_char buffer c;
       begin match c with
-        | '0' as c -> Buffer.add_char buffer c; int (i*10)
-        | '1' as c -> Buffer.add_char buffer c; int (i*10 + 1)
-        | '2' as c -> Buffer.add_char buffer c; int (i*10 + 2)
-        | '3' as c -> Buffer.add_char buffer c; int (i*10 + 3)
-        | '4' as c -> Buffer.add_char buffer c; int (i*10 + 4)
-        | '5' as c -> Buffer.add_char buffer c; int (i*10 + 5)
-        | '6' as c -> Buffer.add_char buffer c; int (i*10 + 6)
-        | '7' as c -> Buffer.add_char buffer c; int (i*10 + 7)
-        | '8' as c -> Buffer.add_char buffer c; int (i*10 + 8)
-        | '9' as c -> Buffer.add_char buffer c; int (i*10 + 9)
+        | '0' -> int (i*10)
+        | '1' -> int (i*10 + 1)
+        | '2' -> int (i*10 + 2)
+        | '3' -> int (i*10 + 3)
+        | '4' -> int (i*10 + 4)
+        | '5' -> int (i*10 + 5)
+        | '6' -> int (i*10 + 6)
+        | '7' -> int (i*10 + 7)
+        | '8' -> int (i*10 + 8)
+        | '9' -> int (i*10 + 9)
         | '\'' ->
           if i > 255 then
             error
 	      { loc with el = stream#line; ec = stream#column }
               "Lexical error while trying to read a char"
+              (Buffer.contents buffer)
           else
             { kind = Char (char_of_int i, "'"^Buffer.contents buffer^"'");
               loc  = {loc with el = stream#line; ec = stream#column}}
@@ -378,37 +384,40 @@ let read_char (stream:stream) =
           error
 	    { loc with el = stream#line; ec = stream#column }
             "Lexical error while trying to read a char"
+            (Buffer.contents buffer)
       end
     | None ->
       error
 	{ loc with el = stream#line; ec = stream#column }
-        "Lexical error while trying to read a char"      
+        "Lexical error while trying to read a char"
+        (Buffer.contents buffer)
   in
   let rec hex i =
     match stream#get_c with
-    | Some c ->
-      begin match c with
-        | '0' as c -> Buffer.add_char buffer c; hex (i*16)
-        | '1' as c -> Buffer.add_char buffer c; hex (i*16 + 1)
-        | '2' as c -> Buffer.add_char buffer c; hex (i*16 + 2)
-        | '3' as c -> Buffer.add_char buffer c; hex (i*16 + 3)
-        | '4' as c -> Buffer.add_char buffer c; hex (i*16 + 4)
-        | '5' as c -> Buffer.add_char buffer c; hex (i*16 + 5)
-        | '6' as c -> Buffer.add_char buffer c; hex (i*16 + 6)
-        | '7' as c -> Buffer.add_char buffer c; hex (i*16 + 7)
-        | '8' as c -> Buffer.add_char buffer c; hex (i*16 + 8)
-        | '9' as c -> Buffer.add_char buffer c; hex (i*16 + 9)
-        | 'A' | 'a' as c -> Buffer.add_char buffer c; hex (i*16 + 10)
-        | 'B' | 'b' as c -> Buffer.add_char buffer c; hex (i*16 + 11)
-        | 'C' | 'c' as c -> Buffer.add_char buffer c; hex (i*16 + 12)
-        | 'D' | 'd' as c -> Buffer.add_char buffer c; hex (i*16 + 13)
-        | 'E' | 'e' as c -> Buffer.add_char buffer c; hex (i*16 + 14)
-        | 'F' | 'f' as c -> Buffer.add_char buffer c; hex (i*16 + 15)
+    | Some c -> Buffer.add_char buffer c;
+      begin match c with 
+        | '0' -> hex (i*16)
+        | '1' -> hex (i*16 + 1)
+        | '2' -> hex (i*16 + 2)
+        | '3' -> hex (i*16 + 3)
+        | '4' -> hex (i*16 + 4)
+        | '5' -> hex (i*16 + 5)
+        | '6' -> hex (i*16 + 6)
+        | '7' -> hex (i*16 + 7)
+        | '8' -> hex (i*16 + 8)
+        | '9' -> hex (i*16 + 9)
+        | 'A' | 'a' -> hex (i*16 + 10)
+        | 'B' | 'b' -> hex (i*16 + 11)
+        | 'C' | 'c' -> hex (i*16 + 12)
+        | 'D' | 'd' -> hex (i*16 + 13)
+        | 'E' | 'e' -> hex (i*16 + 14)
+        | 'F' | 'f' -> hex (i*16 + 15)
         | '\'' ->
           if i > 255 then
             error
 	      { loc with el = stream#line; ec = stream#column }
               "Lexical error while trying to read a char"
+              (Buffer.contents buffer)
           else
           { kind = Char (char_of_int i, "'"^Buffer.contents buffer^"'");
             loc  = {loc with el = stream#line; ec = stream#column}}
@@ -416,11 +425,13 @@ let read_char (stream:stream) =
           error
 	    { loc with el = stream#line; ec = stream#column }
             "Lexical error while trying to read a char"
+            (Buffer.contents buffer)
       end
     | None ->
       error
 	{ loc with el = stream#line; ec = stream#column }
-        "Lexical error while trying to read a char"      
+        "Lexical error while trying to read a char"
+        (Buffer.contents buffer)
   in
   match stream#get_c with
   | Some('\'') ->
@@ -435,6 +446,7 @@ let read_char (stream:stream) =
             error
 	      {loc with el = stream#line; ec = stream#column}
 	      "Lexical error: Illegal backslash escape in character"
+              (Buffer.contents buffer)
         | Some('n' as c) -> Buffer.add_char buffer c;
           if stream#get_c = Some '\'' then
             { kind = Char ('\n', "'\\n'");
@@ -443,6 +455,7 @@ let read_char (stream:stream) =
             error
 	      {loc with el = stream#line; ec = stream#column}
 	      "Lexical error: Illegal backslash escape in character"
+              (Buffer.contents buffer)
         | Some('r' as c) -> Buffer.add_char buffer c;
           if stream#get_c = Some '\'' then
             { kind = Char ('\r',"'\\r'");
@@ -451,6 +464,7 @@ let read_char (stream:stream) =
             error
 	      {loc with el = stream#line; ec = stream#column}
 	      "Lexical error: Illegal backslash escape in character"
+              (Buffer.contents buffer)
         | Some('t' as c) -> Buffer.add_char buffer c;
           if stream#get_c = Some '\'' then
             { kind = Char ('\t', "'\\t'");
@@ -459,6 +473,7 @@ let read_char (stream:stream) =
             error
 	      {loc with el = stream#line; ec = stream#column}
 	      "Lexical error: Illegal backslash escape in character"
+              (Buffer.contents buffer)
         | Some('0' .. '9' as c) -> Buffer.add_char buffer c; int 0
         | Some('x'|'X' as c) -> Buffer.add_char buffer c; hex 0
         | Some('\\' as c) -> Buffer.add_char buffer c;
@@ -469,10 +484,12 @@ let read_char (stream:stream) =
             error
 	      {loc with el = stream#line; ec = stream#column}
 	      "Lexical error: Illegal backslash escape in character"
+              (Buffer.contents buffer)
         | Some _ | None ->
           error
 	    {loc with el = stream#line; ec = stream#column}
 	    "Lexical error: Illegal backslash escape in character"
+            (Buffer.contents buffer)
        )
      | Some(c) -> Buffer.add_char buffer c;
        if stream#get_c = Some '\''
@@ -487,6 +504,7 @@ let read_char (stream:stream) =
        error
 	 {loc with el = stream#line; ec = stream#column}
 	 "Lexical error: Illegal backslash escape in character"
+         (Buffer.contents buffer)
     )
   | _ -> assert false
 
@@ -500,7 +518,8 @@ let read_string (stream:stream) =
     let rec f res =
       match stream#get_c with
       | Some('"') -> res
-      | Some('\\' as c) -> Buffer.add_char b c;
+      | Some('\\' as c) ->
+        Buffer.add_char b c;
         (match stream#get_c with
          | Some('"' as c) -> Buffer.add_char b c; f (res ^ "\"")
          | Some('n' as c) -> Buffer.add_char b c; f (res ^ "\n")
@@ -510,12 +529,14 @@ let read_string (stream:stream) =
          | _   ->
            error
 	     {loc with el = stream#line; ec = stream#column}
-	     "Lexical error: Illegal backslash escape in string")
+	     "Lexical error: Illegal backslash escape in string"
+             (Buffer.contents b))
       | Some(c) -> Buffer.add_char b c; f (res ^ (string_of_char c))
       | None ->
           error
 	    {loc with el = stream#line; ec = stream#column}
 	    "Lexical error: Incomplete string"
+            (Buffer.contents b)
     in
     match stream#get_c with
     | Some('"') ->
@@ -536,12 +557,39 @@ let read_comment (stream:stream) =
       error
 	{loc with el = stream#line; ec = stream#column}
 	"Lexical error: Incomplete comment"
+        res
+    | Some('\\') ->
+      (match stream#get_c with
+       | None ->
+         error
+	   {loc with el = stream#line; ec = stream#column}
+	   "Lexical error: Incomplete comment"
+           (res ^ "\\")
+       | Some(c) -> f (res ^ "\\" ^(string_of_char c)) level)
+    | Some('\'' as c) ->
+      (stream#put_c c;
+       try
+         match read_char stream with
+         | {kind=Char (_, s); loc = _ } ->
+             f (res ^ s) level
+         | {kind=Keyop (Quote, _); loc = _ } ->
+             f (res ^ "'") level
+         | _ -> assert false
+       with Lexing _ -> f (res ^ "'") level
+      )
+    | Some('"' as c) ->
+      (stream#put_c c;
+       match read_string stream with
+       | {kind = String (_, s); loc = _} ->
+           f (res ^ s) level
+       | _ -> assert false)
     | Some('(') ->
       (match stream#get_c with
        | None ->
          error
 	   {loc with el = stream#line; ec = stream#column}
 	   "Lexical error: Incomplete comment"
+           (res ^ "(")
        | Some('*') -> f (res ^ "(*") (level+1)
        | Some(c) -> f (res ^ "(" ^(string_of_char c)) level)
     | Some('*') ->
@@ -550,6 +598,7 @@ let read_comment (stream:stream) =
           error
 	    {loc with el = stream#line; ec = stream#column}
 	    "Lexical error: Incomplete comment"
+            (res ^ "*")
        | Some(')') ->
          if level = 1 then res ^ "*)"
          else f (res ^ "*)") (level-1)
@@ -577,6 +626,7 @@ let read_op (stream:stream) =
 	error
 	  {loc with el = stream#line; ec = stream#column}
 	  "Lexical error while reading an operator"
+          (res ^ "_")
     | Some(',') -> if res = "" then "," else  (stream#put_c ','; res)
     | Some(';') ->
       if res = "" then
@@ -629,6 +679,7 @@ let read (stream:stream) =
          error
 	   {loc with el = stream#line; ec = stream#column}
            "Lexical error: Unclosed parenthesis"
+           ""
        | Some('*') ->
 	 stream#put_c '*'; stream#put_c '(';
 	 f ((read_comment stream)::res)
@@ -644,6 +695,7 @@ let read (stream:stream) =
 	{ sl = stream#line; sc = stream#column - 1;
 	  el = stream#line; ec = stream#column}
 	"Lexical error: unexpected presence of a backslash"
+        ""
     | Some('{'|'}'|')'|'['|']'|'#'|','|'.'|':'|';'|'`' as c) ->
       stream#put_c c;
       f ((read_op stream)::res)
@@ -652,6 +704,7 @@ let read (stream:stream) =
 	{ sl = stream#line; sc = stream#column - 1;
           el = stream#line; ec = stream#column}
         (Printf.sprintf "Lexical error: don't know what to do with character %C" c)
+        ""
     | None -> List.rev res
   in f []
 
